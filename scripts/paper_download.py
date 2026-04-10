@@ -9,6 +9,10 @@ This script supports:
 - incremental updates that skip valid local files
 - optional PDF-only or source-only refreshes
 
+Notes:
+- `foundational_works` is intentionally excluded from automatic download routing
+- foundational papers must be added only after manual review and explicit approval
+
 Examples:
     python3 scripts/paper_download.py dreamzero --proxy http://127.0.0.1:7890
     python3 scripts/paper_download.py driveva --proxy http://127.0.0.1:7890

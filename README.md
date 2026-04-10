@@ -10,6 +10,8 @@ This repository treats World Action Model research as two main tracks:
 - Embodied Robotics: how an agent's actions change the surrounding physical world for manipulation, navigation, and closed-loop control
 - Autonomous Driving: how ego actions interact with traffic participants and influence future scene evolution for prediction and planning
 
+In addition, the repository reserves a separate `foundational_works` category for highly influential prerequisite papers that help frame the WAM landscape, even when those papers are not themselves world-action models.
+
 This split helps us organize papers more naturally, because the two tracks share the idea of action-conditioned world modeling, but differ a lot in data scale, action space, evaluation setup, and downstream decision-making.
 
 ## What is included
@@ -27,6 +29,14 @@ Paper assets follow the convention documented in [docs/docs.md](docs/docs.md):
 - each paper lives under either `docs/papers/embodied_robotics/` or `docs/papers/autonomous_driving/`
 - folder names use `YYYYMMDD_title_slug`
 - each folder keeps a local PDF together with a `paper_arxiv_code/` directory for notes and source metadata
+- `docs/papers/foundational_works/` is reserved for foundational papers and is not populated automatically
+
+## Foundational Works Policy
+
+- `foundational_works` is used for influential background papers, prerequisite methods, and historically important works that support WAM research
+- papers in this category do not need to be WAM papers themselves
+- this category must not be filled by automatic download or automatic ingestion workflows
+- every paper added to `foundational_works` requires manual review and explicit approval before it is recorded in the repository
 
 ## Scripts
 
