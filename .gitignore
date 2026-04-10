@@ -1,0 +1,3 @@
+docs/*
+!docs/docs.md
+.DS_Store
