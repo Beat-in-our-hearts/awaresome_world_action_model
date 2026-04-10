@@ -4,18 +4,15 @@
 This script supports:
 - alias-based downloads through `scripts/paper_ids.py`
 - track-aware storage under `docs/papers/embodied_robotics/` or
-  `docs/papers/autonomous_driving/`
+  `docs/papers/autonomous_driving/` or `docs/papers/foundational_works/`
 - automatic track detection for known aliases and known arXiv IDs
 - incremental updates that skip valid local files
 - optional PDF-only or source-only refreshes
 
-Notes:
-- `foundational_works` is intentionally excluded from automatic download routing
-- foundational papers must be added only after manual review and explicit approval
-
 Examples:
     python3 scripts/paper_download.py dreamzero --proxy http://127.0.0.1:7890
     python3 scripts/paper_download.py driveva --proxy http://127.0.0.1:7890
+    python3 scripts/paper_download.py serl --proxy http://127.0.0.1:7890
     python3 scripts/paper_download.py --from-file ids.txt --workers 4 --proxy http://127.0.0.1:7890
     python3 scripts/paper_download.py 2601.99999 --track embodied_robotics --proxy http://127.0.0.1:7890
 """
@@ -24,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import datetime as dt
 import gzip
 import http.client
 import json
@@ -53,7 +51,7 @@ ARXIV_SOURCE_URLS = (
     "https://arxiv.org/e-print/{id}",
 )
 DEFAULT_OUTPUT_ROOT = Path("docs/papers")
-TRACK_CHOICES = ("embodied_robotics", "autonomous_driving")
+TRACK_CHOICES = ("embodied_robotics", "autonomous_driving", "foundational_works")
 USER_AGENT = "awaresome-world-action-model-paper-downloader/1.0"
 
 
@@ -74,6 +72,7 @@ class DownloadTarget:
     raw_value: str
     arxiv_id: str
     track: str
+    download_url: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,6 +143,19 @@ def normalize_arxiv_id(value: str) -> str:
     if not re.fullmatch(r"([a-z\-]+/\d{7}|\d{4}\.\d{4,5})", value):
         raise ValueError(f"Unsupported arXiv ID format: {value}")
     return value
+
+
+def is_direct_download_url(value: str) -> bool:
+    parsed = urllib.parse.urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    return bool(Path(parsed.path).suffix)
+
+
+def redirect_url_from_error(exc: urllib.error.HTTPError) -> str | None:
+    if exc.code not in {301, 302, 303, 307, 308}:
+        return None
+    return exc.headers.get("Location")
 
 
 def slugify(text: str) -> str:
@@ -220,6 +232,23 @@ def clean_text(text: str) -> str:
 def paper_dir_name(metadata: PaperMetadata) -> str:
     date_str = metadata.published[:10].replace("-", "")
     return f"{date_str}_{slugify(metadata.title)}"
+
+
+def metadata_from_direct_download(download_url: str) -> PaperMetadata:
+    parsed = urllib.parse.urlparse(download_url)
+    filename = Path(urllib.parse.unquote(parsed.path)).name or "downloaded_paper.pdf"
+    title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return PaperMetadata(
+        arxiv_id="",
+        title=title or "downloaded paper",
+        summary=f"Downloaded directly from {download_url}.",
+        published=now,
+        updated=now,
+        authors=[],
+        pdf_url=download_url,
+        abs_url=download_url,
+    )
 
 
 def looks_like_valid_pdf(path: Path) -> bool:
@@ -301,6 +330,7 @@ def download_with_resume(
 ) -> None:
     part_path = dest.with_suffix(dest.suffix + ".part")
     dest.parent.mkdir(parents=True, exist_ok=True)
+    current_url = url
 
     last_error: Exception | None = None
     for attempt in range(1, retries + 1):
@@ -308,7 +338,7 @@ def download_with_resume(
         headers = {}
         if existing_size > 0:
             headers["Range"] = f"bytes={existing_size}-"
-        request = urllib.request.Request(url, headers=headers)
+        request = urllib.request.Request(current_url, headers=headers)
         try:
             with opener.open(request, timeout=60) as response:
                 append = response.status == 206 and existing_size > 0
@@ -333,6 +363,11 @@ def download_with_resume(
                 return
         except urllib.error.HTTPError as exc:
             last_error = exc
+            redirect_url = redirect_url_from_error(exc)
+            if redirect_url:
+                current_url = urllib.parse.urljoin(current_url, redirect_url)
+                if attempt < retries:
+                    continue
             if exc.code == 429 and attempt < retries:
                 time.sleep(min(5 * attempt, 20))
                 continue
@@ -374,7 +409,14 @@ def write_metadata_files(
     authors = ", ".join(metadata.authors[:8])
     if len(metadata.authors) > 8:
         authors += ", et al."
+    if not authors:
+        authors = "not available"
     summary = textwrap.fill(metadata.summary, width=88)
+    arxiv_id_line = (
+        f"- arXiv ID: {metadata.arxiv_id}"
+        if metadata.arxiv_id
+        else "- arXiv ID: not available"
+    )
     source_line = (
         f"- Source archive: {source_archive_name}"
         if source_archive_name
@@ -382,7 +424,7 @@ def write_metadata_files(
     )
     readme = (
         f"# {metadata.title}\n\n"
-        f"- arXiv ID: {metadata.arxiv_id}\n"
+        f"{arxiv_id_line}\n"
         f"- Published: {metadata.published[:10]}\n"
         f"- Updated: {metadata.updated[:10]}\n"
         f"- Authors: {authors}\n"
@@ -453,7 +495,22 @@ def read_ids(args: argparse.Namespace) -> list[DownloadTarget]:
     result: list[DownloadTarget] = []
     seen_ids: set[str] = set()
     for value in values:
-        normalized = normalize_arxiv_id(resolve_paper_id(value))
+        resolved_value = resolve_paper_id(value)
+        if is_direct_download_url(resolved_value):
+            dedupe_key = resolved_value.strip()
+            if dedupe_key in seen_ids:
+                continue
+            result.append(
+                DownloadTarget(
+                    raw_value=value,
+                    arxiv_id=Path(urllib.parse.urlparse(resolved_value).path).name,
+                    track=args.track,
+                    download_url=resolved_value,
+                )
+            )
+            seen_ids.add(dedupe_key)
+            continue
+        normalized = normalize_arxiv_id(resolved_value)
         track = resolve_paper_track(value) or args.track
         if normalized not in seen_ids:
             result.append(
@@ -465,23 +522,32 @@ def read_ids(args: argparse.Namespace) -> list[DownloadTarget]:
 
 def process_one(target: DownloadTarget, args: argparse.Namespace) -> str:
     opener = make_opener(args.proxy)
-    metadata = fetch_metadata(opener, target.arxiv_id, args.retries)
+    if target.download_url:
+        if args.source_only:
+            raise RuntimeError("Direct download links do not support --source-only.")
+        metadata = metadata_from_direct_download(target.download_url)
+    else:
+        metadata = fetch_metadata(opener, target.arxiv_id, args.retries)
     paper_dir = args.output_root / target.track / paper_dir_name(metadata)
     paper_dir.mkdir(parents=True, exist_ok=True)
     code_dir = paper_dir / "paper_arxiv_code"
     code_dir.mkdir(parents=True, exist_ok=True)
 
-    pdf_path = paper_dir / f"{slugify(metadata.title)}.pdf"
+    parsed_url = urllib.parse.urlparse(target.download_url or metadata.pdf_url)
+    download_ext = Path(parsed_url.path).suffix or ".pdf"
+    pdf_path = paper_dir / f"{slugify(metadata.title)}{download_ext}"
     source_archive_name: str | None = None
 
     if not args.source_only and should_download_pdf(pdf_path, args.refresh):
-        download_with_resume(opener, metadata.pdf_url, pdf_path, args.retries)
+        download_with_resume(opener, target.download_url or metadata.pdf_url, pdf_path, args.retries)
         if not looks_like_valid_pdf(pdf_path):
             raise RuntimeError(
-                f"Downloaded PDF is invalid for {target.arxiv_id}: {pdf_path}"
+                f"Downloaded PDF is invalid for {target.download_url or target.arxiv_id}: {pdf_path}"
             )
 
-    if not args.pdf_only and should_download_source(code_dir, args.refresh):
+    if target.download_url:
+        source_archive_name = None
+    elif not args.pdf_only and should_download_source(code_dir, args.refresh):
         source_archive_name = download_source_archive(opener, metadata, code_dir, args.retries)
     else:
         existing_archives = list(code_dir.glob("source_archive.*"))
@@ -500,6 +566,7 @@ def main() -> int:
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "embodied_robotics").mkdir(parents=True, exist_ok=True)
     (args.output_root / "autonomous_driving").mkdir(parents=True, exist_ok=True)
+    (args.output_root / "foundational_works").mkdir(parents=True, exist_ok=True)
 
     failures: list[tuple[str, str]] = []
     if args.workers <= 1:

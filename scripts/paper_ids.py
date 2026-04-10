@@ -14,7 +14,7 @@ Usage:
 from __future__ import annotations
 
 
-EMBODIED_ROBOTICS_IDS: dict[str, str] = {
+EMBODIED_ROBOTICS_SOURCES: dict[str, str] = {
     "gr1": "2312.13139",
     "gr2": "2410.06158",
     "fastwam": "2603.16666",
@@ -30,41 +30,64 @@ EMBODIED_ROBOTICS_IDS: dict[str, str] = {
     "cosmos_policy": "2601.16163",
     "dreamzero": "2602.15922",
     "gigaworld_policy": "2603.17240",
+    "world2act": "2603.10422",
+    "svam": "2603.16195",
     "action_images": "2604.06168",
     "dywa": "2503.16806",
 }
 
-AUTONOMOUS_DRIVING_IDS: dict[str, str] = {
+AUTONOMOUS_DRIVING_SOURCES: dict[str, str] = {
+    "epona": "2506.24113",
+    "world4drive": "2507.00603",
+    "drivelaw": "2512.23421",
     "driveva": "2604.04198",
 }
 
-LEGACY_ALIAS_IDS: dict[str, str] = {
-    "gr_1": "2312.13139",
-    "gr_2": "2410.06158",
-    "fast_wam": "2603.16666",
-    "prediction_with_action": "2411.18179",
-    "unified_video_action_model": "2503.00200",
-    "unified_world_models": "2504.02792",
-    "lingbot_va": "2601.21998",
-    "mimic_video_model": "2512.15692",
-    "cosmospolicy": "2601.16163",
+FOUNDATIONAL_WORKS_SOURCES: dict[str, str] = {
+    "serl": "2401.16013",
+    "lapa": "2410.11758",
+    "hil_serl": "2410.21845",
+    "pi0": "2410.24164",
+    "pi0_5": "https://www.physicalintelligence.company/download/pi05.pdf",
+    "pi0_6": "2511.14759",
+    "rl_token": "https://www.pi.website/download/rlt.pdf",
+}
+
+TRACK_SOURCE_GROUPS: dict[str, dict[str, str]] = {
+    "embodied_robotics": EMBODIED_ROBOTICS_SOURCES,
+    "autonomous_driving": AUTONOMOUS_DRIVING_SOURCES,
+    "foundational_works": FOUNDATIONAL_WORKS_SOURCES,
+}
+
+TRACK_ID_GROUPS: dict[str, dict[str, str]] = {
+    track: {
+        key: value
+        for key, value in sources.items()
+        if not value.startswith(("http://", "https://"))
+    }
+    for track, sources in TRACK_SOURCE_GROUPS.items()
 }
 
 PAPER_IDS: dict[str, str] = {
-    **EMBODIED_ROBOTICS_IDS,
-    **AUTONOMOUS_DRIVING_IDS,
-    **LEGACY_ALIAS_IDS,
+    **TRACK_SOURCE_GROUPS["embodied_robotics"],
+    **TRACK_SOURCE_GROUPS["autonomous_driving"],
+    **TRACK_SOURCE_GROUPS["foundational_works"],
 }
 
 PAPER_TRACKS: dict[str, str] = {
-    **{key: "embodied_robotics" for key in EMBODIED_ROBOTICS_IDS},
-    **{key: "autonomous_driving" for key in AUTONOMOUS_DRIVING_IDS},
-    **{key: "embodied_robotics" for key in LEGACY_ALIAS_IDS},
+    **{
+        key: track
+        for track, sources in TRACK_SOURCE_GROUPS.items()
+        for key in sources
+    },
 }
 
 ARXIV_ID_TO_TRACK: dict[str, str] = {
-    **{value: "embodied_robotics" for value in EMBODIED_ROBOTICS_IDS.values()},
-    **{value: "autonomous_driving" for value in AUTONOMOUS_DRIVING_IDS.values()},
+    **{
+        value: track
+        for track, ids in TRACK_ID_GROUPS.items()
+        for value in ids.values()
+    },
 }
 
 
@@ -88,10 +111,8 @@ def resolve_paper_track(name_or_id: str) -> str | None:
 
 
 if __name__ == "__main__":
-    print("[embodied_robotics]")
-    for key, value in sorted(EMBODIED_ROBOTICS_IDS.items()):
-        print(f"{key}: {value}")
-    print()
-    print("[autonomous_driving]")
-    for key, value in sorted(AUTONOMOUS_DRIVING_IDS.items()):
-        print(f"{key}: {value}")
+    for track, ids in TRACK_SOURCE_GROUPS.items():
+        print(f"[{track}]")
+        for key, value in sorted(ids.items()):
+            print(f"{key}: {value}")
+        print()

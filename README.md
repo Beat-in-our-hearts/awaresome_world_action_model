@@ -10,7 +10,7 @@ This repository treats World Action Model research as two main tracks:
 - Embodied Robotics: how an agent's actions change the surrounding physical world for manipulation, navigation, and closed-loop control
 - Autonomous Driving: how ego actions interact with traffic participants and influence future scene evolution for prediction and planning
 
-In addition, the repository reserves a separate `foundational_works` category for highly influential prerequisite papers that help frame the WAM landscape, even when those papers are not themselves world-action models.
+In addition, the repository treats `foundational_works` as a third formal track for highly influential prerequisite papers that help frame the WAM landscape, even when those papers are not themselves world-action models.
 
 This split helps us organize papers more naturally, because the two tracks share the idea of action-conditioned world modeling, but differ a lot in data scale, action space, evaluation setup, and downstream decision-making.
 
@@ -26,17 +26,17 @@ This split helps us organize papers more naturally, because the two tracks share
 
 Paper assets follow the convention documented in [docs/docs.md](docs/docs.md):
 
-- each paper lives under either `docs/papers/embodied_robotics/` or `docs/papers/autonomous_driving/`
+- each paper lives under `docs/papers/embodied_robotics/`, `docs/papers/autonomous_driving/`, or `docs/papers/foundational_works/`
 - folder names use `YYYYMMDD_title_slug`
 - each folder keeps a local PDF together with a `paper_arxiv_code/` directory for notes and source metadata
-- `docs/papers/foundational_works/` is reserved for foundational papers and is not populated automatically
+- `docs/papers/foundational_works/` is the repository track for foundational papers and is tracked the same way as the other two categories
 
 ## Foundational Works Policy
 
 - `foundational_works` is used for influential background papers, prerequisite methods, and historically important works that support WAM research
 - papers in this category do not need to be WAM papers themselves
-- this category must not be filled by automatic download or automatic ingestion workflows
-- every paper added to `foundational_works` requires manual review and explicit approval before it is recorded in the repository
+- this category is tracked with the same local folder and metadata layout as the other tracks
+- papers should still be added deliberately, because `foundational_works` is meant for influential background rather than broad catch-all collection
 
 ## Scripts
 
@@ -49,6 +49,7 @@ Common examples:
 python3 scripts/paper_ids.py
 python3 scripts/paper_download.py dreamzero --proxy http://127.0.0.1:7890
 python3 scripts/paper_download.py driveva --proxy http://127.0.0.1:7890
+python3 scripts/paper_download.py serl --proxy http://127.0.0.1:7890
 python3 scripts/paper_download.py --from-file ids.txt --proxy http://127.0.0.1:7890
 python3 scripts/paper_download.py 2601.99999 --track embodied_robotics --proxy http://127.0.0.1:7890
 ```
